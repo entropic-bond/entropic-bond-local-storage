@@ -14,14 +14,46 @@
   },
   "types": "./lib/index.d.ts",
   "files": ["lib"],
+  "publishConfig": {
+    "access": "public",
+    "branches": [
+      "master"
+    ]
+  },
+  "release": {
+    "plugins": [
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/changelog",
+      "@semantic-release/npm",
+      "@semantic-release/git",
+      "@semantic-release/github"
+    ]
+  },
   "scripts": {
     "test": "vitest",
     "build": "vite build",
     "prepare": "npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/entropic-bond/entropic-bond-local-storage.git"
+  },
+  "keywords": [
+    "localStorage",
+    "entropic bond"
+  ],
+  "author": "Josep Seto",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/entropic-bond/entropic-bond-local-storage/issues"
+  },
+  "homepage": "https://github.com/entropic-bond/entropic-bond-local-storage#readme",
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "entropic-bond": "^1.59.5",
     "happy-dom": "^17.4.4",
+    "semantic-release": "^25.0.5",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
     "vite-plugin-dts": "^5.0.3",
