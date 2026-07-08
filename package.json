@@ -1,0 +1,30 @@
+{
+  "name": "@entropic-bond/local-storage",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "LocalStorage plugin for Entropic Bond",
+  "main": "./lib/entropic-bond-local-storage.umd.cjs",
+  "module": "./lib/entropic-bond-local-storage.js",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/entropic-bond-local-storage.js",
+      "require": "./lib/entropic-bond-local-storage.umd.cjs"
+    }
+  },
+  "types": "./lib/index.d.ts",
+  "files": ["lib"],
+  "scripts": {
+    "test": "vitest",
+    "build": "vite build",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "entropic-bond": "^1.59.5",
+    "happy-dom": "^17.4.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0",
+    "vite-plugin-dts": "^5.0.3",
+    "vitest": "^4.1.9"
+  }
+}
