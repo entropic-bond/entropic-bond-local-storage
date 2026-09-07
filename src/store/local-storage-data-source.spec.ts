@@ -1,4 +1,4 @@
-import { DataSource, DocumentObject, Model, persistent, Persistent, registerPersistentClass, Store } from 'entropic-bond'
+import { DataSource, DocumentObject, Model, persistent, Persistent, registerPersistentClass, Store, TransactionConflictError } from 'entropic-bond'
 import { TestUser } from '../mocks/test-user'
 import { LocalStorageDataSource } from './local-storage-data-source'
 
@@ -416,6 +416,123 @@ describe( 'LocalStorage DataSource', ()=>{
 			await model.next()
 			const docs = await model.next()
 			expect( docs ).toHaveLength( 0 )
+		})
+	})
+
+	describe( 'Transactions', ()=>{
+		let model: Model<TestCollection>
+
+		beforeEach(()=>{
+			datasource = new LocalStorageDataSource()
+			Store.useDataSource( datasource )
+			model = Store.getModel<TestCollection>( 'TestCollection' )
+		})
+
+		it( 'should update a document inside a transaction', async ()=>{
+			await model.save( new TestCollection( 'a' ) )
+
+			const result = await model.runTransaction( async handle => {
+				const doc = ( await handle.findById( 'a' ) )!
+				doc.prop = 'updated'
+				await handle.save( doc )
+				return doc
+			})
+
+			expect( result ).toBeInstanceOf( TestCollection )
+			expect( result.prop ).toBe( 'updated' )
+			const stored = await model.findById( 'a' )
+			expect( stored?.prop ).toBe( 'updated' )
+		})
+
+		it( 'should delete a document inside a transaction', async ()=>{
+			await model.save( new TestCollection( 'a' ) )
+
+			const result = await model.runTransaction( async handle => {
+				const doc = ( await handle.findById( 'a' ) )!
+				await handle.delete( doc )
+				return doc
+			})
+
+			expect( result ).toBeInstanceOf( TestCollection )
+			const stored = await model.findById( 'a' )
+			expect( stored ).toBeUndefined()
+		})
+
+		it( 'should return a value from a transaction', async ()=>{
+			await model.save( new TestCollection( 'a' ) )
+
+			const result = await model.runTransaction( async handle => {
+				const doc = ( await handle.findById( 'a' ) )!
+				return doc
+			})
+
+			expect( result ).toBeInstanceOf( TestCollection )
+			expect( result.id ).toBe( 'a' )
+		})
+
+		it( 'should merge a partial update keeping untouched fields', async ()=>{
+			await datasource.save({ TestCollection: [{ id: 'a', prop: 'kept', extra: 1 } as any ]})
+
+			const result = await datasource.runTransaction( async handle => {
+				await handle.save( 'a', 'TestCollection', { prop: 'changed' } as any )
+				return { ok: true }
+			})
+
+			expect( result ).toEqual({ ok: true })
+			const stored = await datasource.findById( 'a', 'TestCollection' ) as any
+			expect( stored.prop ).toBe( 'changed' )
+			expect( stored.extra ).toBe( 1 )
+		})
+
+		it( 'should return undefined when getting a missing document', async ()=>{
+			const result = await datasource.runTransaction( async handle => {
+				const doc = await handle.findById( 'missing', 'TestCollection' )
+				expect( doc ).toBeUndefined()
+				return doc
+			})
+
+			expect( result ).toBeUndefined()
+		})
+
+		it( 'should not apply buffered writes when the callback rejects', async ()=>{
+			await model.save( new TestCollection( 'a' ) )
+
+			await expect(
+				model.runTransaction( async handle => {
+					const doc = ( await handle.findById( 'a' ) )!
+					doc.prop = 'changed'
+					await handle.save( doc )
+					throw new TransactionConflictError( doc )
+				})
+			).rejects.toBeInstanceOf( TransactionConflictError )
+
+			const stored = await model.findById( 'a' )
+			expect( stored?.prop ).toBe( 'a' )
+		})
+
+		it( 'should allow exactly one winner on concurrent compare-and-set transactions', async ()=>{
+			await model.save( new TestCollection( 'a' ) )
+
+			const accept = ( value: string )=> model.runTransaction( async handle => {
+				const doc = ( await handle.findById( 'a' ) )!
+				if ( doc.prop === value ) throw new TransactionConflictError( doc )
+
+				doc.prop = value
+				await handle.save( doc )
+				return doc
+			})
+
+			const [ result1, result2 ] = await Promise.allSettled([ accept( 'winner1' ), accept( 'winner2' ) ])
+
+			expect( result1.status ).not.toBe( result2.status )
+
+			const winner = result1.status === 'fulfilled' ? result1 : result2
+			const loser = winner === result1 ? result2 : result1
+			expect( loser.status ).toBe( 'rejected' )
+			expect(( loser as PromiseRejectedResult ).reason ).toBeInstanceOf( TransactionConflictError )
+
+			const stored = await model.findById( 'a' )
+			expect( stored?.prop ).toBe( winner.status === 'fulfilled' ? winner.value.prop : undefined )
 		})
 	})
 

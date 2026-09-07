@@ -1,7 +1,7 @@
 import { Unsubscriber } from 'entropic-bond'
 import { Collections, DocumentChange, DocumentChangeType, Persistent, PersistentObject } from 'entropic-bond'
 import { Collection } from 'entropic-bond'
-import { CollectionChangeListener, DataSource, DocumentChangeListener, DocumentObject, QueryObject, QueryOperation, QueryOrder } from 'entropic-bond'
+import { CollectionChangeListener, DataSource, DocumentChangeListener, DocumentObject, QueryObject, QueryOperation, QueryOrder, TransactionConflictError, TransactionHandle } from 'entropic-bond'
 
 interface LocalStorageRawData {
 	[ collection: string ]: {
@@ -66,6 +66,7 @@ export class LocalStorageDataSource extends DataSource {
 				const oldValue = data[ document.id ]
 				data[ document.id ] = document
 				this.setCollectionData( collectionName, data )
+				this.bumpVersion( collectionName, document.id )
 				this.notifyChange( collectionName, document, oldValue )
 			})
 		})
@@ -77,7 +78,60 @@ export class LocalStorageDataSource extends DataSource {
 		const data = this.getCollectionData( collectionName )
 		delete data[ id ]
 		this.setCollectionData( collectionName, data )
+		this.bumpVersion( collectionName, id )
 		return Promise.resolve()
+	}
+
+	override runTransaction<Result>( fn: ( handle: TransactionHandle ) => Promise<Result> ): Promise<Result> {
+		const reads: { collectionName: string, id: string, version: number }[] = []
+		const writes: {
+			type: 'save' | 'delete'
+			collectionName: string
+			id: string
+			doc?: Partial<DocumentObject>
+		}[] = []
+
+		const handle: TransactionHandle = {
+			findById: ( id, collectionName ) => {
+				reads.push({ collectionName, id, version: this.versionOf( collectionName, id ) })
+				return Promise.resolve( this.getCollectionData( collectionName )[ id ] )
+			},
+			save: ( id, collectionName, doc ) => {
+				writes.push({ type: 'save', collectionName, id, doc })
+				return Promise.resolve()
+			},
+			delete: ( id, collectionName ) => {
+				writes.push({ type: 'delete', collectionName, id })
+				return Promise.resolve()
+			}
+		}
+
+		return fn( handle ).then( result => {
+			const conflictedRead = reads.find( read => read.version !== this.versionOf( read.collectionName, read.id ) )
+			if ( conflictedRead ) {
+				throw new TransactionConflictError( this.getCollectionData( conflictedRead.collectionName )[ conflictedRead.id ] )
+			}
+
+			writes.forEach( write => {
+				if ( write.type === 'delete' ) {
+					const data = this.getCollectionData( write.collectionName )
+					delete data[ write.id ]
+					this.setCollectionData( write.collectionName, data )
+					this.bumpVersion( write.collectionName, write.id )
+				}
+				else {
+					const data = this.getCollectionData( write.collectionName )
+					const oldValue = data[ write.id ]
+					const newValue = { ...( oldValue ?? {} ), ...write.doc } as DocumentObject
+					data[ write.id ] = newValue
+					this.setCollectionData( write.collectionName, data )
+					this.bumpVersion( write.collectionName, write.id )
+					this.notifyChange( write.collectionName, newValue, oldValue )
+				}
+			})
+
+			return result
+		})
 	}
 
 	next( limit?: number ): Promise<DocumentObject[]> {
@@ -265,4 +319,14 @@ export class LocalStorageDataSource extends DataSource {
 	private _cursor: number = 0
 	private _documentListeners: Collection<Collection<DocumentChangeListener<DocumentObject>>> = {}
 	private _collectionListeners: Collection<Collection<DocumentChangeListener<DocumentObject>>> = {}
+	private _versions: Collection<Collection<number>> = {}
+
+	private versionOf( collectionName: string, id: string ): number {
+		return this._versions[ collectionName ]?.[ id ] ?? 0
+	}
+
+	private bumpVersion( collectionName: string, id: string ) {
+		if ( !this._versions[ collectionName ] ) this._versions[ collectionName ] = {}
+		this._versions[ collectionName ]![ id ] = ( this._versions[ collectionName ]![ id ] ?? 0 ) + 1
+	}
 }
