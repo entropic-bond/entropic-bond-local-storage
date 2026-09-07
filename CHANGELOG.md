@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v1.0.1...v1.0.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* missed semantic/release plugin ([d274d55](https://github.com/entropic-bond/entropic-bond-local-storage/commit/d274d5519a39bdf48910fff726e7e84879355168))
+
 ## [1.0.1](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v1.0.0...v1.0.1) (2026-09-07)
 
 

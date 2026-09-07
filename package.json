@@ -1,7 +1,7 @@
 {
   "name": "@entropic-bond/local-storage",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "LocalStorage plugin for Entropic Bond",
   "main": "./lib/entropic-bond-local-storage.umd.cjs",
   "module": "./lib/entropic-bond-local-storage.js",
