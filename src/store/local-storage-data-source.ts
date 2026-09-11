@@ -76,9 +76,11 @@ export class LocalStorageDataSource extends DataSource {
 
 	delete( id: string, collectionName: string ): Promise<void> {
 		const data = this.getCollectionData( collectionName )
+		const removed = data[ id ]
 		delete data[ id ]
 		this.setCollectionData( collectionName, data )
 		this.bumpVersion( collectionName, id )
+		if ( removed ) this.notifyChange( collectionName, removed, removed, 'delete' )
 		return Promise.resolve()
 	}
 
@@ -115,9 +117,11 @@ export class LocalStorageDataSource extends DataSource {
 			writes.forEach( write => {
 				if ( write.type === 'delete' ) {
 					const data = this.getCollectionData( write.collectionName )
+					const removed = data[ write.id ]
 					delete data[ write.id ]
 					this.setCollectionData( write.collectionName, data )
 					this.bumpVersion( write.collectionName, write.id )
+					if ( removed ) this.notifyChange( write.collectionName, removed, removed, 'delete' )
 				}
 				else {
 					const data = this.getCollectionData( write.collectionName )
@@ -155,16 +159,20 @@ export class LocalStorageDataSource extends DataSource {
 		}
 		const finalListener = ( change: DocumentChange<DocumentObject> ) => {
 			if ( !change.after ) return
-			const testDocs = [ change.after ]
-			if ( change.before ) testDocs.push( change.before )
-			const docs = this.retrieveQueryDocs(testDocs, query.operations!)
-			const uniqueDocs = docs.filter((doc, index, self) => index === self.findIndex(d => d.id === doc.id))
-			if ( uniqueDocs.length > 0 ) listener( uniqueDocs.map( doc => ({
+			const beforeMatches = change.before ? this.matchesQuery( change.before, query ) : false
+			const afterMatches = this.matchesQuery( change.after, query )
+			if ( !beforeMatches && !afterMatches ) return
+
+			const type: DocumentChangeType = change.type === 'delete' || ( beforeMatches && !afterMatches )
+				? 'delete'
+				: change.type
+
+			listener([{
 				before: change.before,
-				after: doc,
-				type: change.type,
+				after: afterMatches ? change.after : change.before,
+				type,
 				params: change.params,
-			} as DocumentChange<DocumentObject> )) )
+			} as DocumentChange<DocumentObject>], this.querySync( query, collectionName ) )
 		}
 		const uid = Math.random().toString( 36 ).substring( 2, 9 )
 		listeners[ uid ] = finalListener
@@ -233,13 +241,13 @@ export class LocalStorageDataSource extends DataSource {
 		return false
 	}
 
-	private notifyChange( collectionPath: string, document: DocumentObject, oldValue: DocumentObject | undefined ) {
+	private notifyChange( collectionPath: string, document: DocumentObject, oldValue: DocumentObject | undefined, type?: DocumentChangeType ) {
 		const event: DocumentChange<DocumentObject> = {
 			before: oldValue,
 			after: document,
 			collectionPath,
 			params: {},
-			type: (oldValue ? 'update' : 'create') as DocumentChangeType
+			type: type ?? ( oldValue ? 'update' : 'create' ) as DocumentChangeType
 		}
 
 		Object.values( this._documentListeners[ collectionPath ] ?? {} ).forEach( listener => listener( event ) )
@@ -278,6 +286,22 @@ export class LocalStorageDataSource extends DataSource {
 				return prevDocs.filter( doc => this.isQueryMatched( doc, queryOperation ) )
 			}
 		}, docs )
+	}
+
+	private querySync( query: QueryObject<DocumentObject>, collectionName: string ): DocumentObject[] {
+		const docs = Object.values( this.getCollectionData( collectionName ) )
+		if ( !query ) return docs
+
+		const matched = Object.entries( query ).reduce(
+			( prevDocs, [ processMethod, value ]) => this.queryProcessor( prevDocs, processMethod as any, value ),
+			docs
+		)
+		return matched.slice( 0, query.limit )
+	}
+
+	private matchesQuery( doc: DocumentObject, query: QueryObject<DocumentObject> ): boolean {
+		if ( !query.operations ) return true
+		return this.retrieveQueryDocs([ doc ], query.operations ).length > 0
 	}
 
 	private deepValue( obj: DocumentObject, propertyPath: string ) {
