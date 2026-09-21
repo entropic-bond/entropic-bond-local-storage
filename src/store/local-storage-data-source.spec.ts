@@ -126,7 +126,10 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall = model.onCollectionChange( model.find(), listener )
 
 			model.save( new TestCollection( 'd' ))
-			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ])
+			expect( listener ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ],
+				[ expect.objectContaining({ id: 'd' }) ]
+			)
 			uninstall()
 		})
 
@@ -135,7 +138,10 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall = model.onCollectionChange( model.find(), listener )
 
 			model.save( new TestCollection( 'd' ))
-			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ])
+			expect( listener ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ],
+				[ expect.objectContaining({ id: 'd' }) ]
+			)
 
 			uninstall()
 			listener.mockClear()
@@ -151,8 +157,14 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall2 = model.onCollectionChange( model.find(), listener2 )
 
 			model.save( new TestCollection( 'f' ))
-			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ])
-			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ])
+			expect( listener1 ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ],
+				[ expect.objectContaining({ id: 'f' }) ]
+			)
+			expect( listener2 ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ],
+				[ expect.objectContaining({ id: 'f' }) ]
+			)
 
 			uninstall1()
 			uninstall2()
@@ -166,7 +178,10 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall2 = model2.onCollectionChange( model2.find(), listener2 )
 
 			model.save( new TestCollection( 'g' ))
-			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'g' }) }) ])
+			expect( listener1 ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'g' }) }) ],
+				[ expect.objectContaining({ id: 'g' }) ]
+			)
 			expect( listener2 ).not.toHaveBeenCalled()
 
 			listener1.mockClear()
@@ -174,7 +189,10 @@ describe( 'LocalStorage DataSource', ()=>{
 
 			model2.save( new TestCollection2( 'h' ))
 			expect( listener1 ).not.toHaveBeenCalled()
-			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'h' }) }) ])
+			expect( listener2 ).toHaveBeenCalledWith(
+				[ expect.objectContaining({ after: expect.objectContaining({ id: 'h' }) }) ],
+				[ expect.objectContaining({ id: 'h' }) ]
+			)
 
 			uninstall1()
 			uninstall2()

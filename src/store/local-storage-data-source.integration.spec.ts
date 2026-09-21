@@ -598,10 +598,13 @@ describe( 'LocalStorage Model', ()=>{
 			await model.save( loadedUser! )
 			unsubscriber()
 
-			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({
-				after: expect.objectContaining({ id: 'user6' }),
-				type: 'update'
-			}) ])
+			expect( listener ).toHaveBeenCalledWith(
+				[ expect.objectContaining({
+					after: expect.objectContaining({ id: 'user6' }),
+					type: 'update'
+				}) ],
+				[ expect.objectContaining({ id: 'user6' }) ]
+			)
 		})
 	})
 })
