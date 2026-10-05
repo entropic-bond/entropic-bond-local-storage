@@ -1,3 +1,17 @@
+# [2.0.0](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v1.0.2...v2.0.0) (2026-10-05)
+
+
+### Bug Fixes
+
+* migrate to the entropic-bond 2.0.0 QueryCursor API ([#5](https://github.com/entropic-bond/entropic-bond-local-storage/issues/5)) ([ee869d7](https://github.com/entropic-bond/entropic-bond-local-storage/commit/ee869d7c3fe1560f75e73db229ab87c70494d058)), closes [#4](https://github.com/entropic-bond/entropic-bond-local-storage/issues/4)
+
+
+### BREAKING CHANGES
+
+* LocalStorageDataSource.find() returns Promise<QueryCursor>
+and LocalStorageDataSource.next() was removed. Consumers must advance
+pagination through the cursor returned by find().
+
 ## [1.0.2](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v1.0.1...v1.0.2) (2026-09-07)
 
 
