@@ -551,6 +551,18 @@ describe( 'LocalStorage Model', ()=>{
 				const docs = await model.next( 20 )
 				expect( docs ).toHaveLength( 0 )
 			})
+
+			it( 'should keep each result set for interleaved models of one collection', async ()=>{
+				const otherModel = Store.getModel<TestUser>( 'TestUser' )
+				await model.find().get( 2 )
+				await otherModel.find().get( 3 )
+
+				const firstPage = await model.next()
+				const secondPage = await otherModel.next()
+
+				expect( firstPage.map( doc => doc.id )).toEqual([ 'user3', 'user4' ])
+				expect( secondPage.map( doc => doc.id )).toEqual([ 'user4', 'user5', 'user6' ])
+			})
 		})
 	})
 
@@ -601,7 +613,7 @@ describe( 'LocalStorage Model', ()=>{
 			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({
 				after: expect.objectContaining({ id: 'user6' }),
 				type: 'update'
-			}) ])
+			}) ], undefined )
 		})
 	})
 })
