@@ -85,24 +85,28 @@ describe( 'LocalStorage DataSource', ()=>{
 		})
 
 		it( 'should find all documents', async ()=>{
-			const docs = await datasource.find( null as any, 'TestCollection' )
+			const cursor = await datasource.find( null as any, 'TestCollection' )
+			const docs = await cursor.next()
 			expect( docs ).toHaveLength( 3 )
 		})
 
 		it( 'should find with limit', async ()=>{
-			const docs = await datasource.find({ limit: 2 } as any, 'TestCollection' )
+			const cursor = await datasource.find({ limit: 2 } as any, 'TestCollection' )
+			const docs = await cursor.next()
 			expect( docs ).toHaveLength( 2 )
 		})
 
 		it( 'should support pagination with next', async ()=>{
-			await datasource.find({ limit: 2 } as any, 'TestCollection' )
-			const nextDocs = await datasource.next()
+			const cursor = await datasource.find({ limit: 2 } as any, 'TestCollection' )
+			await cursor.next()
+			const nextDocs = await cursor.next()
 			expect( nextDocs ).toHaveLength( 1 )
 		})
 
 		it( 'should return empty array when no more results', async ()=>{
-			await datasource.find({ limit: 3 } as any, 'TestCollection' )
-			const nextDocs = await datasource.next()
+			const cursor = await datasource.find({ limit: 3 } as any, 'TestCollection' )
+			await cursor.next()
+			const nextDocs = await cursor.next()
 			expect( nextDocs ).toHaveLength( 0 )
 		})
 
@@ -126,7 +130,7 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall = model.onCollectionChange( model.find(), listener )
 
 			model.save( new TestCollection( 'd' ))
-			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ])
+			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ], undefined )
 			uninstall()
 		})
 
@@ -135,7 +139,7 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall = model.onCollectionChange( model.find(), listener )
 
 			model.save( new TestCollection( 'd' ))
-			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ])
+			expect( listener ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'd' }) }) ], undefined )
 
 			uninstall()
 			listener.mockClear()
@@ -151,8 +155,8 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall2 = model.onCollectionChange( model.find(), listener2 )
 
 			model.save( new TestCollection( 'f' ))
-			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ])
-			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ])
+			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ], undefined )
+			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'f' }) }) ], undefined )
 
 			uninstall1()
 			uninstall2()
@@ -166,7 +170,7 @@ describe( 'LocalStorage DataSource', ()=>{
 			const uninstall2 = model2.onCollectionChange( model2.find(), listener2 )
 
 			model.save( new TestCollection( 'g' ))
-			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'g' }) }) ])
+			expect( listener1 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'g' }) }) ], undefined )
 			expect( listener2 ).not.toHaveBeenCalled()
 
 			listener1.mockClear()
@@ -174,7 +178,7 @@ describe( 'LocalStorage DataSource', ()=>{
 
 			model2.save( new TestCollection2( 'h' ))
 			expect( listener1 ).not.toHaveBeenCalled()
-			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'h' }) }) ])
+			expect( listener2 ).toHaveBeenCalledWith([ expect.objectContaining({ after: expect.objectContaining({ id: 'h' }) }) ], undefined )
 
 			uninstall1()
 			uninstall2()
@@ -416,6 +420,46 @@ describe( 'LocalStorage DataSource', ()=>{
 			await model.next()
 			const docs = await model.next()
 			expect( docs ).toHaveLength( 0 )
+		})
+
+		it( 'should continue a model\'s own query with next', async ()=>{
+			await model.find().get( 2 )
+			const docs = await model.next()
+			expect( docs.map( doc => doc.id )).toEqual([ 'user3', 'user4' ])
+		})
+
+		it( 'should keep each result set for interleaved models of one collection', async ()=>{
+			const otherModel = Store.getModel<TestUser>( 'TestUser' )
+			await model.find().get( 2 )
+			await otherModel.find().get( 3 )
+
+			const firstPage = await model.next()
+			const secondPage = await otherModel.next()
+
+			expect( firstPage.map( doc => doc.id )).toEqual([ 'user3', 'user4' ])
+			expect( secondPage.map( doc => doc.id )).toEqual([ 'user4', 'user5', 'user6' ])
+		})
+
+		it( 'should not mix result sets across collections', async ()=>{
+			const otherModel = Store.getModel<TestCollection2>( 'TestCollection2' )
+			await otherModel.save( new TestCollection2( 'other1' ) )
+			await model.find().get( 2 )
+			await otherModel.find().get( 1 )
+
+			const docs = await model.next()
+
+			expect( docs.map( doc => doc.id )).toEqual([ 'user3', 'user4' ])
+		})
+
+		it( 'should reset pagination for a model only when it re-runs its query', async ()=>{
+			const otherModel = Store.getModel<TestUser>( 'TestUser' )
+			await model.find().get( 2 )
+			await otherModel.find().get( 2 )
+			await model.find().get()
+
+			const docs = await otherModel.next()
+
+			expect( docs.map( doc => doc.id )).toEqual([ 'user3', 'user4' ])
 		})
 	})
 

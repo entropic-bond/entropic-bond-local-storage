@@ -1,7 +1,7 @@
 import { Unsubscriber } from 'entropic-bond'
 import { Collections, DocumentChange, DocumentChangeType, Persistent, PersistentObject } from 'entropic-bond'
 import { Collection } from 'entropic-bond'
-import { CollectionChangeListener, DataSource, DocumentChangeListener, DocumentObject, QueryObject, QueryOperation, QueryOrder, TransactionConflictError, TransactionHandle } from 'entropic-bond'
+import { CollectionChangeListener, DataSource, DocumentChangeListener, DocumentObject, QueryCursor, QueryObject, QueryOperation, QueryOrder, TransactionConflictError, TransactionHandle } from 'entropic-bond'
 
 interface LocalStorageRawData {
 	[ collection: string ]: {
@@ -42,21 +42,18 @@ export class LocalStorageDataSource extends DataSource {
 		return Promise.resolve( data[ id ] as DocumentObject )
 	}
 
-	find( queryObject: QueryObject<DocumentObject>, collectionName: string ): Promise<DocumentObject[]> {
+	find( queryObject: QueryObject<DocumentObject>, collectionName: string ): Promise<QueryCursor> {
 		const rawData = this.getCollectionData( collectionName )
 		const rawDataArray = Object.values( rawData )
-		if ( !queryObject ) return Promise.resolve( rawDataArray )
+		if ( !queryObject ) return Promise.resolve( new QueryCursor( rawDataArray, 0 ))
 
-		this._lastLimit = queryObject.limit || 0
-		this._cursor = 0
-
-		this._lastMatchingDocs = Object.entries( queryObject ).reduce(
+		const matchingDocs = Object.entries( queryObject ).reduce(
 			( prevDocs, [ processMethod, value ]) => {
 				return this.queryProcessor( prevDocs, processMethod as any, value )
-			}, Object.values( rawDataArray )
+			}, rawDataArray
 		)
 
-		return Promise.resolve( this._lastMatchingDocs.slice( 0, queryObject.limit ) )
+		return Promise.resolve( new QueryCursor( matchingDocs, queryObject.limit || 0 ))
 	}
 
 	save( collections: Collections ): Promise<void> {
@@ -134,13 +131,6 @@ export class LocalStorageDataSource extends DataSource {
 		})
 	}
 
-	next( limit?: number ): Promise<DocumentObject[]> {
-		if ( limit ) this._lastLimit = limit
-		this.incCursor( this._lastLimit )
-
-		return Promise.resolve( this._lastMatchingDocs.slice( this._cursor, this._cursor + this._lastLimit ) )
-	}
-
 	count( queryObject: QueryObject<DocumentObject>, collectionName: string ): Promise<number> {
 		return Promise.resolve(
 			Object.keys( this.getCollectionData( collectionName ) ?? {} ).length
@@ -215,22 +205,6 @@ export class LocalStorageDataSource extends DataSource {
 
 	private collectionsMatchingTemplate( template: string ): string[] {
 		return this.getAllCollectionNames().filter( collectionName => DataSource.isStringMatchingTemplate( template, collectionName ) )
-	}
-
-	private incCursor( amount: number ) {
-		this._cursor += amount
-		if ( this._cursor > this._lastMatchingDocs.length ) {
-			this._cursor = this._lastMatchingDocs.length
-		}
-	}
-
-	private decCursor( amount: number ) {
-		this._cursor -= amount
-		if ( this._cursor < 0 ) {
-			this._cursor = 0
-			return true
-		}
-		return false
 	}
 
 	private notifyChange( collectionPath: string, document: DocumentObject, oldValue: DocumentObject | undefined ) {
@@ -314,9 +288,6 @@ export class LocalStorageDataSource extends DataSource {
 		return [ propVal || propertyValue, val || value ]
 	}
 
-	private _lastMatchingDocs: DocumentObject[] = []
-	private _lastLimit: number = 0
-	private _cursor: number = 0
 	private _documentListeners: Collection<Collection<DocumentChangeListener<DocumentObject>>> = {}
 	private _collectionListeners: Collection<Collection<DocumentChangeListener<DocumentObject>>> = {}
 	private _versions: Collection<Collection<number>> = {}
