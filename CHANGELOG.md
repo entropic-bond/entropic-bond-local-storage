@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v2.0.0...v2.0.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **deps:** release built against entropic-bond ^2.0.4 ([#7](https://github.com/entropic-bond/entropic-bond-local-storage/issues/7)) ([04aa33f](https://github.com/entropic-bond/entropic-bond-local-storage/commit/04aa33f0ab7b12bbb18113cb411c3c5530839756))
+
 # [2.0.0](https://github.com/entropic-bond/entropic-bond-local-storage/compare/v1.0.2...v2.0.0) (2026-10-05)
 
 
